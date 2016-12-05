@@ -88,6 +88,7 @@
     - I've tried replacing the table with all the same value ($d0 for example) and the result is that each scanline on the screen becomes identical. This indicates that this is what's switching the graphics out per-line, but it seems strange that there are only 8 possibile lines.
   - Each iteration of this loop consists of two parts; one unrolled part, and one subroutine that's called each iteration. In total each iteration is 63 cycles exactly, which I find a bit odd since I would've expected the VIC to steal cycles when doing FPP like this (and displaying sprites for the border, for that matter)..
     - Unrolled part (17 bytes each, 26 cycles):
+```
       nop          (2 cycles)
       nop          (2 cycles)
       nop          (2 cycles)
@@ -96,7 +97,9 @@
       sta $0ea7    (this addr is part of an address in the subroutine part; same for each iteration, 4 cycles)
       lda #$19     (same for each iteration, 2 cycles)
       jsr $0e9e    (subroutine addr, 6 cycles)
+```
     - Subroutine (at $0e9e, 37 cycles):
+```
       nop       (2 cycles)
       nop       (2 cycles)
       nop       (2 cycles)
@@ -110,12 +113,15 @@
       nop       (2 cycles)
       clc       (clear carry for next iteration, 2 cycles)
       rts       (6 cycles)
+```
     - One of the quirks of this routine, however, is the sprite zoomer on top. As the sprites affect raster timing, a different routine is required for lines where the sprite zoomer is visible. To handle this, the unrolled code is modified and a `jmp $4xxx` is inserted over the usual `nop`'s (as both instruction streams are 3 bytes in length) for the line where the switch needs to take place. This appears to jump into the middle of another unrolled part with sprite timing. TODO: Check to see if this other code is modified as well to jump back into the first piece of speedcode. If this is the case, it should be possible to get rid of the sprite zoomer and isolate the plasma.
+```
       jmp $4e13
       lda $344b, y
       adc $3700, x
       sta $0ea7
       jsr $0e9e
+```
   - Continue to ??? at $1dbd :)
 
 - ??? at $1dbd
