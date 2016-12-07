@@ -6,7 +6,19 @@
   - Star as sprite zoomer
   - Black border around screen
 
-- Initial frame raster IRQ: $1000 on line 0
+- Known (rough) memory map:
+  - $0060       - sprite zoomer enable (0/1 for off/on)
+  - $0066-$0067 - SMC temp storage for the absolute addr for the instruction restored at the addr at $006a-$006b in the sprite zoomer uninit routine (little-endian)
+  - $0068-$0069 - SMC address in first $d011 bashing routine (where the nop's will be replaced by a jmp to switch raster routines mid-frame for the sprite zoomer)
+  - $006a-$006b - SMC address in second $d011 bashing routine (where lda $zzzz, y will be replaced by a jmp to switch routines mid-frame back to first routine)
+  - $1000-$103f - Initial frame raster IRQ
+  - $1040-$1061 - Semi-stable raster IRQ and screen setup 1/2 (semi-stable because it actually ends up with 0-1 cycle jitter)
+  - $1062-$1096 - Semi-stable raster IRQ and screen setup 2/2
+  - $1097-$1dbc - First $d011-bashing raster routine (no sprite zoomer)
+  - $27eb-$???? - sprite zoomer frame init routine
+  - $29df-$2a05 - sprite zoomer frame uninit routine
+
+- Initial frame raster IRQ: $1000-$103f on line 0
   - IO regs:
     - $dd00: $4b (VIC bank 0 ($0000-$3fff))
     - $d011: $11 (y scroll: 1, 24 rows, screen visible, text mode, extended bg off)
@@ -25,6 +37,7 @@
   - Stores $04 (purple) in $d023 (extra bg color 2)
   - Jumps to subroutine at $27eb
     - Looks like this is code to start the sprite zoomer stuff and do the jump injection stuff in the first $d011 bashing section. This code also appears to be located right after the raster IRQ at $1040 (yes it's huge).
+    - Fun fact: we can overwrite this JSR with 3 `nop`'s and the sprite zoomer goes away. This indicates that 1. yes, it's the sprite zoomer init, and 2., there's probably a separate routine later that will undo the SMC to switch raster routines (otherwise the screen would go bonkers if we removed this call on subsequent frames).
     - TODO: Find out what this does
   - Sets up another raster IRQ at $1040 on line $2f (47)
   - ACK interrupts
@@ -32,7 +45,7 @@
     - lda $dc0d (Interrupt control + status reg), does nothing with this value (?)
   - Restores Y, A, X from $e0-$e2
 
-- Raster IRQ at $1040-$27ea on line $2f (47)
+- Raster IRQ at $1040-$1061 on line $2f (47)
   - Pushes A, X, Y onto stack
   - Sets up nested raster IRQ at $1062 on next line ($30, 48)
   - ACK interrupts
@@ -45,7 +58,7 @@
     - Looks like there's more than there needs to be; my tests only ever hit 3 or 4 of these before the nested IRQ fires
     - This actually ends with `jmp *` at the end, wonder if that was some safety net thing for testing. If this is meant to stabilize the raster to 0 or 1 cycles off, it would be bad if we actually hit this jmp, so I don't think it ever gets that far.
 
-- Semi-stable IRQ at $1062 on line $30 (48) (occurs at cycle 9 or 10; one cycle jitter)
+- Semi-stable IRQ at $1062-$1096 on line $30 (48) (occurs at cycle 9 or 10; one cycle jitter)
   - Restore SP from X
     - Easy way to get around HW IRQ stack manipulation
   - Wait loop (waits until cycle 27/28 on same line)
@@ -65,8 +78,9 @@
     - Add immediate value to value above (clc, adc #$01, then some cmp/bcc stuff to limit it below $b0)
     - tay
       - Y is some value from $00-$af that changes each frame
-  - Stores $ef in $dd02 (port A data direction)
-    - TODO: No idea what this is for :) might be shutting down the loader
+  - Stores $3f in $dd02 (port A data direction)
+    - This magically changes $dd00 from $4b to $48. I'm not entirely sure how, but this is critical to the display routine; this means the VIC bank is bank 3 at this point ($c000-$ffff), _not_ bank 0!
+    - TODO: Find out more details about this port and why this does what it does :)
   - Clear carry
     - Preparation for the next bit which contains lots of ADC's and assumes a clear carry for each iteration
   - Continue in $d011-bashing loop :)
@@ -118,7 +132,7 @@
       rts       (6 cycles)
 ```
 
-    - One of the quirks of this routine, however, is the sprite zoomer on top. As the sprites affect raster timing, a different routine is required for lines where the sprite zoomer is visible. To handle this, the unrolled code is modified and a `jmp $4xxx` is inserted over the usual `nop`'s (as both instruction streams are 3 bytes in length) for the line where the switch needs to take place. This appears to jump into the middle of another unrolled part with sprite timing. TODO: Check to see if this other code is modified as well to jump back into the first piece of speedcode. If this is the case, it should be possible to get rid of the sprite zoomer and isolate the plasma.
+    - One of the quirks of this routine, however, is the sprite zoomer on top. As the sprites affect raster timing, a different routine is required for lines where the sprite zoomer is visible. To handle this, the unrolled code is modified and a `jmp $4xxx` is inserted over the usual `nop`'s (as both instruction streams are 3 bytes in length) for the line where the switch needs to take place. This appears to jump into the middle of another unrolled part with sprite timing. TODO: Figure out where this second routine starts/stops and what it looks like
 
 ```
       jmp $4e13
@@ -130,6 +144,16 @@
 
   - Continue to ??? at $1dbd :)
 
-- ??? at $1dbd
+- ??? at $1dbd-$27ea
+  - TODO: Block out beginning bits before 3 JSR's
+  - Jumps to subroutine at $29df (sprite zoomer uninit routine)
+    - Returns if value at $60 is zero
+      - This appears to be 0 or 1 basically and indicates whether or not the sprite zoomer should show
+      - TODO: Look for other references to this value (particularly in the sprite zoomer setup routine at $27eb)
+    - Sets $d015 to $03 (disables all sprites except 0 and 1, the border sprites)
+    - Writes $ea (nop) to 3 bytes starting at the address in $0068-$0069
+      - Undoes first raster routine switch SMC in the setup routine
+    - Writes $b9 (lda absolute,y) followed by address stored in $0066-$0067 (little-endian) to 3 bytes starting at the address in $006a-$006b
+      - Undoes second raster routine switch SMC in the setup routine
 
 - Not sure what's happening outside of the raster IRQ's
