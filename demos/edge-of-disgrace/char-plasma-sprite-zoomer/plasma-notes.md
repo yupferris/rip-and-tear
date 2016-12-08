@@ -105,7 +105,7 @@
     - Table arranged as 256 bytes where each 32 bytes repeats $d0 x 4, $d2 x 4, etc.
     - I've tried replacing the table with all the same value ($d0 for example) and the result is that each scanline on the screen becomes identical. This indicates that this is what's switching the graphics out per-line, but it seems strange that there are only 8 possibile lines.
     - Looking further into this, I tried replacing the whole table with `$d0 $d2 $d4 $d6 $d8 $da $dc $de` sequences instead of `$d0 $d0 $d0 $d0 $d1 ...` and the plasma "scales", showing many more lines that still fit together. I think what this means is that the FPP is doing some kind of stretching that displays half-chars, so we get 8*4=32 lines for the whole FPP by setting $d018 to point to one of 8 sets of 4 lines each, where which of the 4 lines that gets displayed is based on the raster line. TODO: Look into what data layout this requires, and/or if this hypothesis is completely bogus :)
-  - Each iteration of this loop consists of two parts; one unrolled part, and one subroutine that's called each iteration. In total each iteration is 63 cycles exactly, which I find a bit odd since I would've expected the VIC to steal cycles when doing FPP like this (and displaying sprites for the border, for that matter)..
+  - Each iteration of this loop consists of two parts; one unrolled part, and one subroutine that's called each iteration. In total each iteration is 63 cycles exactly, which I find a bit odd since I would've expected the VIC to steal cycles when doing FPP like this (and displaying sprites for the border, for that matter).. but indeed, this _does_ happen every line.
     - Unrolled part (17 bytes each, 26 cycles):
 
 ```
@@ -127,7 +127,7 @@
       nop       (2 cycles)
       nop       (2 cycles)
       nop       (2 cycles)
-      sta $d011 (always stores $19 from other part; TODO: Which cycle(s) does the write occur at? 4 cycles)
+      sta $d011 (always stores $19 from other part on cycle 56 or 57 each line, 4 cycles)
       lda $3de7 (low byte is the part of the addr written to by unrolled part, 4 cycles)
       sta $d018 (changing screen location for FPP surely; TODO: inspect data at $3d00-$3dff to be sure, 4 cycles)
       cmp $00   (timing instruction surely, 3-cycles)
