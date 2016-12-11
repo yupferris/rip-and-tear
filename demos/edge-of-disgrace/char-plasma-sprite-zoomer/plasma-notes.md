@@ -194,11 +194,19 @@
       - I'd be willing to bet this is a good place to look for effect param/frame counting addresses
   - Continue to ??? at $1e0e :)
 
-- ??? at $1e0e-$27ea
-  - This appears to be the plasma x-update (this is what I'm after here :) )
+- ??? at $1e0e-$25a9
+  - This appears to be the first part of the plasma x-update
   - load value at $27e5 into a
     - TODO: Find out where this points to and if whether or not address changes via SMC each frame
   - load X and Y from values updated in previous section ($1dbd-$1dd2)
   - TODO: Tear this bit apart :)
+
+- ??? at $25aa-$27ea
+  - This appears to be the second part of the plasma x-update
+  - TODO: Initial setup bits (just clc I think)
+  - Unrolled loop, 38 iterations
+    - Note this is the same as the effect is wide in chars. Could it really be that only one char row is updated each frame, making only 8 FPP lines??
+    - TODO: Tear this bit apart :)
+  - TODO: Last bits before/including RTI
 
 - Not sure what's happening outside of the raster IRQ's
