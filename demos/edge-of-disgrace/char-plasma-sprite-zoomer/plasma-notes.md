@@ -2,7 +2,7 @@
   - TODO: Does this apply to both 24 and 25 row screens? I'm assuming it does otherwise opening the borders would shift the screen pos..
 
 - General stuff being displayed:
-  - Plasma in char area (38 chars x 25 lines)
+  - Plasma in char area (40 chars x 25 lines)
   - Star as sprite zoomer
   - Black border around screen
 
@@ -20,7 +20,9 @@
   - $29df-$2a05 - sprite zoomer frame uninit routine
   - $2a06-$2a08 - effect sequencing values (TODO: Figure out what each one is and if there are more of them)
   - $2a09-$???? - frame counting/effect sequencing code
+  - $3c00-$3c28 - Screen memory (only this first row is used)
   - $9000-$???? - music update routine
+  - $c000-$ffff - Character data
 
 - Initial frame raster IRQ: $1000-$103f on line 0
   - IO regs:
@@ -104,7 +106,7 @@
     - $de (screen mem: $3400-$37ff, bitmap mem: $3800)
     - Table arranged as 256 bytes where each 32 bytes repeats $d0 x 4, $d2 x 4, etc.
     - I've tried replacing the table with all the same value ($d0 for example) and the result is that each scanline on the screen becomes identical. This indicates that this is what's switching the graphics out per-line, but it seems strange that there are only 8 possibile lines.
-    - Looking further into this, I tried replacing the whole table with `$d0 $d2 $d4 $d6 $d8 $da $dc $de` sequences instead of `$d0 $d0 $d0 $d0 $d1 ...` and the plasma "scales", showing many more lines that still fit together. I think what this means is that the FPP is doing some kind of stretching that displays half-chars, so we get 8*4=32 lines for the whole FPP by setting $d018 to point to one of 8 sets of 4 lines each, where which of the 4 lines that gets displayed is based on the raster line. TODO: Look into what data layout this requires, and/or if this hypothesis is completely bogus :)
+    - Looking further into this, I tried replacing the whole table with `$d0 $d2 $d4 $d6 $d8 $da $dc $de` sequences instead of `$d0 $d0 $d0 $d0 $d1 ...` and the plasma "scales", showing many more lines that still fit together.
   - Each iteration of this loop consists of two parts; one unrolled part, and one subroutine that's called each iteration. In total each iteration is 63 cycles exactly, which I find a bit odd since I would've expected the VIC to steal cycles when doing FPP like this (and displaying sprites for the border, for that matter).. but indeed, this _does_ happen every line.
     - Unrolled part (17 bytes each, 26 cycles):
 
@@ -205,8 +207,14 @@
   - This appears to be the second part of the plasma x-update
   - TODO: Initial setup bits (just clc I think)
   - Unrolled loop, 38 iterations
-    - Note this is the same as the effect is wide in chars. Could it really be that only one char row is updated each frame, making only 8 FPP lines??
+    - Note this is the same as the effect is wide in chars minus the left/rightmost chars, which are used for the left/right borders. Perhaps this single char row is updated each frame?
     - TODO: Tear this bit apart :)
   - TODO: Last bits before/including RTI
 
 - Not sure what's happening outside of the raster IRQ's
+
+- Latest knowns:
+  - There are only 8 different charsets for the different plasma lines displayed per frame. These are located at $c000, $c800, $d000, ..., $f800.
+  - No sprites are visible in the FPP portion of the screen (except for when the sprite zoomer is showing ofc). This means no sprites stealing cycles.
+  - Screen mem is at $3c00; only the first row (40 bytes) is used. It would seem the screen and color data for this row is read at the top of the frame, and then the video bank is switched and the FPP stretching starts. I haven't checked the alignments etc, but if the "FPP by repeating last char line" technique is used (http://codebase64.org/doku.php?id=base:fpp-last-line), that should make _all_ of this fall into place, including the "no VIC stealing cycles each line" thing :)
+  - The base picture update routine appears to ultimately just modify 38/40 screen mem bytes each frame; I don't think any per-pixel stuff is going on at this point (but I could be wrong).
