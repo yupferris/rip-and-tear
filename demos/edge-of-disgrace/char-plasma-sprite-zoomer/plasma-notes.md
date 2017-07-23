@@ -4,7 +4,7 @@
   - Black border around screen
 
 - General plasma routine:
-  - The plasma is displayed using char FPP, where one of 8 different 144x1 lines of graphics is chosen and displayed for each of the 200 lines in the visible screen.
+  - The plasma is displayed using FPP by using the repeating char lines trick and changing $d018 every line for g-accesses, where one of 8 different 144x1 lines of graphics is chosen and displayed for each of the 200 lines in the visible screen.
   - The left/right borders of the plasma are simply displayed using hardcoded chars; there are no sprites visible over the plasma (except for the zoomer, where a separate FPP routine is used and what appears to be a constant number of sprites, which I don't plan on digging into).
   - The base 144x8 plasma picture that's stretched using FPP changes each frame; this is done by updating the 38 bytes of screen mem (char indexes). It doesn't look like any updates are done on a per-pixel level.
   - The screen mem used (only the first line is used) starts at 0x3c00. The hardware reads this line, along with all of the color data, at the top of the screen. Before the FPP starts doing its thing, the bank is switched. The FPP repeats the last line of each character, and the character mem is changed per-line. Since the bank is switched between reading screen/color mem and reading char mem, these regions don't actually overlap. This also means that the screen/color mem can't change throughout the screen, but it's sufficient to simply change char graphics. This FPP technique is explained here: http://codebase64.org/doku.php?id=base:fpp-last-line
@@ -222,5 +222,5 @@
 - Latest knowns:
   - There are only 8 different charsets for the different plasma lines displayed per frame. These are located at $c000, $c800, $d000, ..., $f800.
   - No sprites are visible in the FPP portion of the screen (except for when the sprite zoomer is showing ofc). The left/right borders are just characters. This means no sprites stealing cycles.
-  - Screen mem is at $3c00; only the first row (40 bytes) is used. It would seem the screen and color data for this row is read at the top of the frame, and then the video bank is switched and the FPP stretching starts. I haven't checked the alignments etc, but if the "FPP by repeating last char line" technique is used (http://codebase64.org/doku.php?id=base:fpp-last-line), that should make _all_ of this fall into place, including the "no VIC stealing cycles each line" thing :)
+  - Screen mem is at $3c00; only the first row (40 bytes) is used. It would seem the screen and color data for this row is read at the top of the frame, and then the video bank is switched and the FPP stretching starts.
   - The base picture update routine appears to ultimately just modify 38/40 screen mem bytes each frame; I don't think any per-pixel stuff is going on at this point (but I could be wrong).
