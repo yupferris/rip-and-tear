@@ -82,6 +82,7 @@
       - X is some value from $00-$7f that changes each frame
     - Stores $79 in $d011
       - y scroll: 1, 25 rows, screen visible, bitmap mode (why does this change from earlier on the screen?), extended bg on
+        - I think the point here is to set an illegal mode, which causes the VIC to continue to scan chars normally, but output all black. This creates the solid black line on the top of the plasma, and the left/right edges of the line are covered by sprites so it doesn't go outside of the borders on the side that are made with chars later.
       - Write occurs on line 49 cycle 1/2 (one cycle jitter from before)
     - lda with immediate value that's updated each frame (values seen: $44, $45, $46, $47)
     - Add immediate value to value above (clc, adc #$01, then some cmp/bcc stuff to limit it below $b0)
